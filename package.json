@@ -1,0 +1,7 @@
+{
+  "private": true,
+  "scripts": {
+    "deploy": "cd C:/umi_psi && firebase deploy",
+    "test": "functions/venv/Scripts/python.exe functions/test_main.py"
+  }
+}

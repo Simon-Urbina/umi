@@ -1,0 +1,77 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+@import "@fontsource-variable/literata";
+@import "@fontsource-variable/figtree";
+
+@theme inline {
+    --font-sans: 'Figtree Variable', system-ui, sans-serif;
+    --font-serif: 'Literata Variable', Georgia, serif;
+    --font-heading: var(--font-serif);
+    --color-ring: var(--ring);
+    --color-input: var(--input);
+    --color-border: var(--border);
+    --color-destructive: var(--destructive);
+    --color-accent-foreground: var(--accent-foreground);
+    --color-accent: var(--accent);
+    --color-muted-foreground: var(--muted-foreground);
+    --color-muted: var(--muted);
+    --color-secondary-foreground: var(--secondary-foreground);
+    --color-secondary: var(--secondary);
+    --color-primary-foreground: var(--primary-foreground);
+    --color-primary: var(--primary);
+    --color-popover-foreground: var(--popover-foreground);
+    --color-popover: var(--popover);
+    --color-card-foreground: var(--card-foreground);
+    --color-card: var(--card);
+    --color-foreground: var(--foreground);
+    --color-background: var(--background);
+    --color-tide: var(--tide);
+    --color-tide-ink: var(--tide-ink);
+    --color-coral: var(--coral);
+    --color-coral-ink: var(--coral-ink);
+    --radius-sm: calc(var(--radius) * 0.6);
+    --radius-md: calc(var(--radius) * 0.8);
+    --radius-lg: var(--radius);
+    --radius-xl: calc(var(--radius) * 1.4);
+    --radius-2xl: calc(var(--radius) * 1.8);
+}
+
+/* #58A4B0 marea + rosa coral de contraste; las variantes "ink" son las versiones legibles para texto */
+:root {
+    --background: #eef5f6;
+    --foreground: #173a42;
+    --card: #fbfdfd;
+    --card-foreground: #173a42;
+    --popover: #fbfdfd;
+    --popover-foreground: #173a42;
+    --primary: #2d6f7a;
+    --primary-foreground: #ffffff;
+    --secondary: #d8ecef;
+    --secondary-foreground: #1f5560;
+    --muted: #e0edef;
+    --muted-foreground: #587579;
+    --accent: #fadde3;
+    --accent-foreground: #8e3148;
+    --tide: #58a4b0;
+    --tide-ink: #2d6f7a;
+    --coral: #ee9aaa;
+    --coral-ink: #b8445f;
+    --destructive: #b3412e;
+    --border: #cde0e3;
+    --input: #cde0e3;
+    --ring: #58a4b0;
+    --radius: 0.75rem;
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground antialiased;
+  }
+  html {
+    @apply font-sans;
+  }
+}

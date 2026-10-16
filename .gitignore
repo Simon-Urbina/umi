@@ -1,0 +1,12 @@
+node_modules/
+dist/
+venv/
+__pycache__/
+*.local
+.secret.local
+.firebase/
+*-debug.log
+.env*
+
+# datos personales, nunca al repo
+quien-soy.md
