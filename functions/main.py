@@ -281,8 +281,8 @@ def analyze_daily_entry(req: https_fn.CallableRequest) -> dict:
     try:
         vector = _embed(text)
         memories = _recall(user_ref, vector)
-    except Exception:  # memory is a bonus: never lose an entry over it
-        logger.exception("memory unavailable")
+    except Exception as e:  # memory is a bonus: never lose an entry over it
+        logger.error(f"memory unavailable: {e!r}")
 
     prompt = f'<entrada fecha="{day.isoformat()}">\n{text}\n</entrada>'
     if memories:

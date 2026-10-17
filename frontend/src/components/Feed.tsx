@@ -63,7 +63,13 @@ export default function Feed() {
                 </span>
               </div>
               <div className="flex min-w-0 flex-col gap-4">
-                <p className="font-serif text-lg leading-relaxed whitespace-pre-wrap">{e.rawText}</p>
+                <details className="group">
+                  <summary className="cursor-pointer text-sm text-muted-foreground select-none hover:text-foreground">
+                    <span className="group-open:hidden">Leer lo que escribí</span>
+                    <span className="hidden group-open:inline">Ocultar lo que escribí</span>
+                  </summary>
+                  <p className="mt-3 font-serif text-lg leading-relaxed whitespace-pre-wrap">{e.rawText}</p>
+                </details>
                 {e.primaryEmotions.length + e.keyTopics.length > 0 && (
                   <ul className="flex flex-wrap gap-1.5 text-sm">
                     {e.primaryEmotions.map((t) => (
