@@ -2,7 +2,7 @@ import { collection, limit, onSnapshot, orderBy, query, type Timestamp } from 'f
 import { Waves } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router'
-import Tide from '@/components/Tide'
+import Tide, { dailyMoods } from '@/components/Tide'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useAuth } from '@/lib/auth'
 import { db } from '@/lib/firebase'
@@ -20,7 +20,7 @@ type Entry = {
   profileEdits?: number
 }
 
-const TIDE_ENTRIES = 14
+const TIDE_DAYS = 14
 
 export default function Feed() {
   const user = useAuth()
@@ -45,7 +45,7 @@ export default function Feed() {
 
   return (
     <section className="flex flex-col gap-10">
-      <Tide moods={entries.slice(0, TIDE_ENTRIES).map((e) => e.moodScore).reverse()} />
+      <Tide moods={dailyMoods(entries).slice(0, TIDE_DAYS).map((d) => d.moodScore).reverse()} />
       <ol className="flex flex-col">
         {entries.map((e) => {
           const date = e.createdAt?.toDate()

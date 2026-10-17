@@ -5,7 +5,7 @@ from types import SimpleNamespace
 from firebase_functions.https_fn import HttpsError
 
 os.environ["OWNER_EMAIL"] = "duena@example.com"
-from main import _require_uid, apply_profile_edits, entry_day, entry_digest, newest_that_fit, parse_analysis
+from main import _require_uid, apply_profile_edits, day_digests, entry_day, newest_that_fit, parse_analysis
 
 
 def call_as(email, verified=True):
@@ -53,14 +53,22 @@ new, applied = apply_profile_edits(profile, [
     {"find": "", "replace": "x"},  # empty: skipped
     {"find": 3, "replace": "x"},  # wrong type: skipped
 ])
+assert apply_profile_edits("a", ["a", None]) == ("a", [])  # the model's output is untrusted: non-objects skipped
 assert new == profile.replace("Cómbita", "Tunja") and len(applied) == 1, (new, applied)
 assert apply_profile_edits("a b c d", [{"find": c, "replace": c.upper()} for c in "abcd"])[0] == "A B C d"  # max 3
 utc = timezone.utc
 # 03:00 UTC on the 17th is still 22:00 on the 16th in Colombia.
-d = entry_digest({"createdAt": datetime(2026, 10, 17, 3, tzinfo=utc), "moodScore": 7, "primaryEmotions": ["alivio"],
-                  "keyTopics": [], "summary": "Pasé a la segunda entrevista de Mercury.", "rawText": "largo"})
+[d] = day_digests([{"createdAt": datetime(2026, 10, 17, 3, tzinfo=utc), "moodScore": 7, "primaryEmotions": ["alivio"],
+                    "keyTopics": [], "summary": "Pasé a la segunda entrevista de Mercury.", "rawText": "largo"}])
 assert d.splitlines() == ["### 2026-10-16 (ánimo 7/10)", "Emociones: alivio", "Pasé a la segunda entrevista de Mercury."], d
-assert entry_digest({"createdAt": datetime(2026, 1, 1, 12, tzinfo=utc), "rawText": "x" * 900}).endswith("x" * 600)
+assert day_digests([{"createdAt": datetime(2026, 1, 1, 12, tzinfo=utc), "rawText": "x" * 900}])[0].endswith("x" * 600)
+# Two entries the same Colombian day become one block with the average mood; the next day is its own block.
+days = day_digests([
+    {"createdAt": datetime(2026, 10, 16, 14, tzinfo=utc), "moodScore": 4, "summary": "a"},
+    {"createdAt": datetime(2026, 10, 17, 2, tzinfo=utc), "moodScore": 7, "summary": "b"},
+    {"createdAt": datetime(2026, 10, 17, 14, tzinfo=utc), "moodScore": 8, "summary": "c"},
+])
+assert days == ["### 2026-10-16 (ánimo 5.5/10)\na\nb", "### 2026-10-17 (ánimo 8/10)\nc"], days
 
 # 3am on the 17th in Colombia: "today" is the 17th, the 16th is allowed, the 18th is not.
 now = datetime(2026, 10, 17, 8, tzinfo=utc)

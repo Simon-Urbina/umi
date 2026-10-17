@@ -16,8 +16,8 @@ const LEVELS = {
   patterns: {
     fn: 'generate_patterns',
     title: 'Tus patrones',
-    intro: 'Umi lee tus últimas 30 entradas y te cuenta qué se repite: cómo ha ido tu ánimo, qué temas vuelven y cómo vas con tus metas. Cada informe se guarda y alimenta tu Horizonte.',
-    sources: 'entradas',
+    intro: 'Umi lee tus últimos 30 días con entradas y te cuenta qué se repite: cómo ha ido tu ánimo, qué temas vuelven y cómo vas con tus metas. Cada informe se guarda y alimenta tu Horizonte.',
+    sources: 'días',
     heading: '[&_h2]:text-tide-ink',
   },
   horizons: {

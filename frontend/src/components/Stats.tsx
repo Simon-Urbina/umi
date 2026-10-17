@@ -1,5 +1,6 @@
 import { collection, getDocs, limit, orderBy, query, type Timestamp } from 'firebase/firestore'
 import { useEffect, useState } from 'react'
+import { dailyMoods } from '@/components/Tide'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useAuth } from '@/lib/auth'
 import { db } from '@/lib/firebase'
@@ -11,7 +12,7 @@ const WEEKDAYS = ['lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado
 const MIN_ENTRIES = 3
 
 /** Groups entries by each key they carry and reports the average mood and the count per key. */
-export function moodBy(entries: Entry[], keys: (e: Entry) => string[]): Row[] {
+export function moodBy<T extends { moodScore: number }>(entries: T[], keys: (e: T) => string[]): Row[] {
   const groups = new Map<string, number[]>()
   for (const e of entries) {
     for (const key of new Set(keys(e))) groups.set(key, [...(groups.get(key) ?? []), e.moodScore])
@@ -80,7 +81,8 @@ export default function Stats() {
     .map((r) => ({ ...r, value: r.n }))
     .sort((a, b) => b.n - a.n)
     .slice(0, 6)
-  const byDay = moodBy(entries, (e) => (e.createdAt ? [WEEKDAYS[(e.createdAt.toDate().getDay() + 6) % 7]] : []))
+  // Weekdays average whole days, so a day written three times doesn't count triple.
+  const byWeekday = moodBy(dailyMoods(entries), (d) => [WEEKDAYS[(new Date(`${d.day}T12:00`).getDay() + 6) % 7]])
     .sort((a, b) => WEEKDAYS.indexOf(a.label) - WEEKDAYS.indexOf(b.label))
 
   return (
@@ -99,7 +101,7 @@ export default function Stats() {
         max={Math.max(...emotions.map((r) => r.n))}
         format={(r) => String(r.n)}
       />
-      <Bars title="Ánimo según el día" note="Promedio de 1 a 10 por día de la semana" rows={byDay} max={10} format={avg} />
+      <Bars title="Ánimo según el día" note="Promedio de 1 a 10 por día de la semana" rows={byWeekday} max={10} format={avg} />
     </section>
   )
 }

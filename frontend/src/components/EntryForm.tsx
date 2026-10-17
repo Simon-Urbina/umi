@@ -8,7 +8,10 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { functions } from '@/lib/firebase'
 
 // The function analyzes AND saves the entry; the Feed picks it up via its live query.
-const analyzeDailyEntry = httpsCallable<{ rawText: string; entryDate: string }>(functions, 'analyze_daily_entry')
+// Match the function's 120s timeout; the SDK's default 70s can cut off a slow first run.
+const analyzeDailyEntry = httpsCallable<{ rawText: string; entryDate: string }>(functions, 'analyze_daily_entry', {
+  timeout: 120_000,
+})
 
 const localDay = (d: Date) => d.toLocaleDateString('en-CA') // YYYY-MM-DD in the device's time zone
 const asDate = (day: string) => new Date(`${day}T12:00`) // noon dodges DST edges when parsing

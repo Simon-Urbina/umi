@@ -1,5 +1,6 @@
 import json
 from datetime import date, datetime, time, timedelta, timezone
+from itertools import groupby
 from pathlib import Path
 
 from firebase_admin import firestore, initialize_app
@@ -16,7 +17,9 @@ SEED_PROFILE = Path(__file__).with_name("quien-soy.md")  # git-ignored, private
 # Llama 3 was retired from Groq's free tier (Aug 2026); these are the vendor-recommended replacements.
 GROQ_MODEL = "openai/gpt-oss-120b"
 MAX_ENTRY_CHARS = 20_000
-PATTERN_ENTRIES = 30
+PATTERN_DAYS = 30
+# shortcut: assumes at most ~4 entries a day; raise it if 30 days ever need more entries than this.
+PATTERN_FETCH = PATTERN_DAYS * 4
 # shortcut: Groq free tier caps at 8k tokens/minute and the profile (~3.3k) rides along on every call,
 # so the oldest text is dropped past this; raise on a paid tier.
 MAX_JOURNAL_CHARS = 10_000
@@ -52,7 +55,7 @@ Lee la <entrada> (su atributo fecha es el día del que habla; si no es hoy, no d
 Todo el texto del JSON va en español."""
 
 PATTERNS_PROMPT = """Eres Umi, un acompañante con formación en psicología que lee el diario de una persona. """ + PROFILE_CONTEXT + """
-Después recibirás sus entradas en orden cronológico, ya analizadas: fecha, ánimo (1-10), emociones, temas, metas y un resumen de los hechos.
+Después recibirás sus días en orden cronológico, ya analizados: fecha, ánimo del día (1-10, promedio si escribió varias veces) y, por cada entrada de ese día, emociones, temas, metas y un resumen de los hechos.
 Escribe en español, tuteando, con tono gentil y cercano, en Markdown y en no más de 450 palabras, con estas secciones:
 
 ## Cómo has estado
@@ -64,7 +67,7 @@ Avances o tropiezos en lo que te propusiste; si no hay metas, dilo en una frase.
 ## Una idea para llevarte
 Una sola observación constructiva y práctica, basada en lo que escribió.
 
-Sé específico: usa hechos, nombres, fechas y frases concretas de lo que recibes, y relaciónalos con lo que dice su perfil (sus metas, sus tensiones, las personas importantes). Evita frases genéricas que servirían para cualquier persona. No inventes hechos ni atribuyas a una fecha algo que no aparece en ella. Habla de patrones observados, no de diagnósticos. Si hay pocas entradas, dilo y sé breve."""
+Sé específico: usa hechos, nombres, fechas y frases concretas de lo que recibes, y relaciónalos con lo que dice su perfil (sus metas, sus tensiones, las personas importantes). Evita frases genéricas que servirían para cualquier persona. No inventes hechos ni atribuyas a una fecha algo que no aparece en ella. Habla de patrones observados, no de diagnósticos. Si hay pocos días, dilo y sé breve."""
 
 
 HORIZON_REPORTS = 8
@@ -111,7 +114,9 @@ def _embed(text: str) -> list[float]:
     from google import genai
     from google.genai import types
 
-    result = genai.Client(vertexai=True, project=PROJECT_ID.value, location="us-central1").models.embed_content(
+    # Keep the client in a variable: a temporary one gets garbage-collected and closes its connection mid-request.
+    client = genai.Client(vertexai=True, project=PROJECT_ID.value, location="us-central1")
+    result = client.models.embed_content(
         model=EMBED_MODEL,
         contents=text[:8000],  # the model reads ~2k tokens; the start carries the meaning
         config=types.EmbedContentConfig(task_type="SEMANTIC_SIMILARITY", output_dimensionality=EMBED_DIMS),
@@ -166,6 +171,8 @@ def apply_profile_edits(profile: str, edits: list[dict]) -> tuple[str, list[dict
     """Applies the model's find/replace edits; anything that doesn't match exactly one spot is skipped."""
     applied = []
     for edit in edits[:MAX_PROFILE_EDITS]:
+        if not isinstance(edit, dict):
+            continue
         find, replace = edit.get("find"), edit.get("replace")
         if not isinstance(find, str) or not isinstance(replace, str) or not find.strip():
             continue
@@ -371,26 +378,37 @@ def ensure_profile(req: https_fn.CallableRequest) -> dict:
     return {"ok": True}
 
 
-def entry_digest(e: dict) -> str:
-    """Compact form of an analyzed entry, so Patterns fits all 30 entries instead of re-reading the raw text."""
-    lines = [f"### {_day(e['createdAt'])} (ánimo {e.get('moodScore', '?')}/10)"]
-    for label, key in (("Emociones", "primaryEmotions"), ("Temas", "keyTopics"), ("Metas", "detectedGoals")):
-        if e.get(key):
-            lines.append(f"{label}: {', '.join(e[key])}")
-    # Entries saved before summaries existed fall back to the start of their text.
-    lines.append(e.get("summary") or e.get("rawText", "")[:600])
-    return "\n".join(lines)
+def day_digests(entries: list[dict]) -> list[str]:
+    """One compact block per day (entries oldest first), so Patterns fits 30 days instead of re-reading raw text.
+    A day's mood is the average of its entries."""
+    blocks = []
+    for day, group in groupby(entries, key=lambda e: _day(e["createdAt"])):
+        group = list(group)
+        moods = [e["moodScore"] for e in group if "moodScore" in e]
+        mood = f"{sum(moods) / len(moods):.1f}".removesuffix(".0") if moods else "?"
+        lines = [f"### {day} (ánimo {mood}/10)"]
+        for e in group:
+            for label, key in (("Emociones", "primaryEmotions"), ("Temas", "keyTopics"), ("Metas", "detectedGoals")):
+                if e.get(key):
+                    lines.append(f"{label}: {', '.join(e[key])}")
+            # Entries saved before summaries existed fall back to the start of their text.
+            lines.append(e.get("summary") or e.get("rawText", "")[:600])
+        blocks.append("\n".join(lines))
+    return blocks
 
 
 @https_fn.on_call(secrets=[GROQ_API_KEY], timeout_sec=120)
 def generate_patterns(req: https_fn.CallableRequest) -> dict:
     uid = _require_uid(req)
-    entries = _latest(uid, "entries", PATTERN_ENTRIES)
+    entries = _latest(uid, "entries", PATTERN_FETCH)
     if not entries:
         raise https_fn.HttpsError(
             https_fn.FunctionsErrorCode.FAILED_PRECONDITION, "Escribe al menos una entrada en tu diario primero."
         )
-    digests = newest_that_fit([entry_digest(e) for e in entries], MAX_JOURNAL_CHARS)
+    days = day_digests(entries)
+    if len(entries) == PATTERN_FETCH:
+        days = days[1:] or days  # the oldest day may be cut off by the fetch limit
+    digests = newest_that_fit(days[-PATTERN_DAYS:], MAX_JOURNAL_CHARS)
     report = _ask_groq(PATTERNS_PROMPT, _with_profile(_profile_text(req), "\n\n".join(digests)), "low")
     if not report:
         raise https_fn.HttpsError(https_fn.FunctionsErrorCode.INTERNAL, "No se pudo generar el informe.")
