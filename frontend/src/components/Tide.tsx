@@ -1,3 +1,5 @@
+import { localDay } from '@/lib/days'
+
 const W = 600
 const H = 120
 const PAD = 14
@@ -6,7 +8,7 @@ const PAD = 14
 export function dailyMoods(entries: { createdAt: { toDate(): Date } | null; moodScore: number }[]) {
   const days = new Map<string, number[]>()
   for (const e of entries) {
-    const day = (e.createdAt?.toDate() ?? new Date()).toLocaleDateString('en-CA') // a pending write is from today
+    const day = localDay(e.createdAt?.toDate() ?? new Date()) // a pending write is from today
     days.set(day, [...(days.get(day) ?? []), e.moodScore])
   }
   return [...days].map(([day, moods]) => ({ day, moodScore: moods.reduce((a, b) => a + b, 0) / moods.length }))
@@ -39,7 +41,7 @@ export default function Tide({ moods }: { moods: number[] }) {
         preserveAspectRatio="none"
         className="h-28 w-full"
         role="img"
-        aria-label={`Tu ánimo en tus últimos ${moods.length} días: ${moods.map((m) => +m.toFixed(1)).join(', ')} de 10`}
+        aria-label={`Tu ánimo en ${moods.length} ${moods.length === 1 ? 'día' : 'días'}: ${moods.map((m) => +m.toFixed(1)).join(', ')} de 10`}
       >
         <defs>
           <linearGradient id="sea" x1="0" y1="0" x2="0" y2="1">
@@ -51,7 +53,7 @@ export default function Tide({ moods }: { moods: number[] }) {
         <path d={line} fill="none" stroke="var(--tide)" strokeWidth="2.5" vectorEffect="non-scaling-stroke" />
       </svg>
       <figcaption className="flex justify-between text-sm text-muted-foreground">
-        <span>Tu marea, {moods.length === 1 ? 'último día' : `últimos ${moods.length} días`}</span>
+        <span>Tu marea, {moods.length} {moods.length === 1 ? 'día' : 'días'} con entradas</span>
         <span>Promedio {avg.toFixed(1)} de 10</span>
       </figcaption>
     </figure>

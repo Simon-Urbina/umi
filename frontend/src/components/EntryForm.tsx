@@ -5,6 +5,7 @@ import { es } from 'react-day-picker/locale'
 import { Button } from '@/components/ui/button'
 import { Calendar } from '@/components/ui/calendar'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
+import { asDate, localDay } from '@/lib/days'
 import { functions } from '@/lib/firebase'
 
 // The function analyzes AND saves the entry; the Feed picks it up via its live query.
@@ -13,10 +14,7 @@ const analyzeDailyEntry = httpsCallable<{ rawText: string; entryDate: string }>(
   timeout: 120_000,
 })
 
-const localDay = (d: Date) => d.toLocaleDateString('en-CA') // YYYY-MM-DD in the device's time zone
-const asDate = (day: string) => new Date(`${day}T12:00`) // noon dodges DST edges when parsing
-
-const calendarClassNames = {
+export const calendarClassNames = {
   day_button: 'rounded-full! hover:bg-secondary data-[selected-single=true]:bg-tide-ink! data-[selected-single=true]:text-white!',
   today: 'rounded-full! bg-accent! text-accent-foreground',
 }

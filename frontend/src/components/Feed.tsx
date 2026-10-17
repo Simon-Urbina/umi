@@ -1,10 +1,16 @@
-import { collection, limit, onSnapshot, orderBy, query, type Timestamp } from 'firebase/firestore'
-import { Waves } from 'lucide-react'
+import { collection, onSnapshot, orderBy, query, where, type Timestamp } from 'firebase/firestore'
+import { CalendarIcon, ChevronLeft, ChevronRight, Waves } from 'lucide-react'
 import { useEffect, useState } from 'react'
+import { es } from 'react-day-picker/locale'
 import { Link } from 'react-router'
+import { calendarClassNames } from '@/components/EntryForm'
 import Tide, { dailyMoods } from '@/components/Tide'
+import { Button } from '@/components/ui/button'
+import { Calendar } from '@/components/ui/calendar'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useAuth } from '@/lib/auth'
+import { addDays, asDate, localDay, mondayOf } from '@/lib/days'
 import { db } from '@/lib/firebase'
 
 type Entry = {
@@ -20,32 +26,106 @@ type Entry = {
   profileEdits?: number
 }
 
-const TIDE_DAYS = 14
-
 export default function Feed() {
   const user = useAuth()
-  const [entries, setEntries] = useState<Entry[] | null>(null)
+  const [loaded, setLoaded] = useState<{ week: string; entries: Entry[] } | null>(null)
   const [error, setError] = useState('')
+
+  const today = localDay(new Date()) // recomputed each render, so it rolls over at midnight
+  const thisWeek = mondayOf(today)
+  const [picked, setPicked] = useState<string | null>(null) // Monday of the chosen week; null = this week
+  const [open, setOpen] = useState(false)
+  const week = picked ?? thisWeek
+  const sunday = addDays(week, 6)
 
   useEffect(() => {
     if (!user) return
-    // shortcut: last 50 only, add pagination when someone has more history than that
-    const q = query(collection(db, 'users', user.uid, 'entries'), orderBy('createdAt', 'desc'), limit(50))
+    // Backdated entries sit at the end of their own day, so they land in that day's week.
+    const q = query(
+      collection(db, 'users', user.uid, 'entries'),
+      where('createdAt', '>=', new Date(`${week}T00:00`)),
+      where('createdAt', '<', new Date(`${addDays(week, 7)}T00:00`)),
+      orderBy('createdAt', 'desc'),
+    )
     return onSnapshot(
       q,
-      (snap) => setEntries(snap.docs.map((d) => ({ id: d.id, ...d.data() }) as Entry)),
+      (snap) => setLoaded({ week, entries: snap.docs.map((d) => ({ id: d.id, ...d.data() }) as Entry) }),
       (e) => setError(e.message),
     )
-  }, [user])
+  }, [user, week])
+  const entries = loaded?.week === week ? loaded.entries : null // a new week shows the skeleton until it loads
+
+  const short = (day: string) => asDate(day).toLocaleDateString('es', { day: 'numeric', month: 'short' })
+  const range = `${short(week)} – ${short(sunday)} ${asDate(sunday).getFullYear()}`
+  const goTo = (monday: string) => setPicked(monday === thisWeek ? null : monday)
+
+  const picker = (
+    <nav aria-label="Semana" className="flex items-center justify-between gap-2">
+      <Button variant="ghost" size="icon-lg" className="rounded-full" aria-label="Semana anterior" onClick={() => goTo(addDays(week, -7))}>
+        <ChevronLeft aria-hidden />
+      </Button>
+      <Popover open={open} onOpenChange={setOpen}>
+        <PopoverTrigger
+          aria-label={`Semana del ${range}. Cambiar semana`}
+          className="inline-flex items-center gap-2 rounded-full border bg-card px-3 py-1.5 text-sm tabular-nums outline-none hover:bg-secondary focus-visible:ring-2 focus-visible:ring-ring"
+        >
+          {week === thisWeek ? 'Esta semana' : range}
+          <CalendarIcon className="size-4 text-tide-ink" aria-hidden />
+        </PopoverTrigger>
+        <PopoverContent sideOffset={8} className="w-auto rounded-2xl p-1 shadow-[0_24px_64px_-24px_#173a4280]">
+          <Calendar
+            mode="range"
+            locale={es}
+            selected={{ from: asDate(week), to: asDate(sunday) }}
+            defaultMonth={asDate(week)}
+            endMonth={asDate(today)}
+            disabled={{ after: asDate(today) }}
+            className="[--cell-size:--spacing(9)]"
+            classNames={calendarClassNames}
+            onDayClick={(date) => {
+              goTo(mondayOf(localDay(date)))
+              setOpen(false)
+            }}
+          />
+        </PopoverContent>
+      </Popover>
+      <Button
+        variant="ghost"
+        size="icon-lg"
+        className="rounded-full"
+        aria-label="Semana siguiente"
+        disabled={week === thisWeek}
+        onClick={() => goTo(addDays(week, 7))}
+      >
+        <ChevronRight aria-hidden />
+      </Button>
+    </nav>
+  )
 
   if (error) return <p role="alert" className="text-sm text-destructive">{error}</p>
-  if (!entries) return <Skeleton className="h-32 w-full rounded-2xl" />
+  if (!entries)
+    return (
+      <section className="flex flex-col gap-10">
+        {picker}
+        <Skeleton className="h-32 w-full rounded-2xl" />
+      </section>
+    )
   if (!entries.length)
-    return <p className="text-muted-foreground">Tu primera entrada aparecerá aquí, junto con la respuesta de Umi.</p>
+    return (
+      <section className="flex flex-col gap-10">
+        {picker}
+        <p className="text-muted-foreground">
+          {week === thisWeek
+            ? 'Tus entradas de esta semana aparecerán aquí, junto con la respuesta de Umi.'
+            : 'No escribiste esa semana.'}
+        </p>
+      </section>
+    )
 
   return (
     <section className="flex flex-col gap-10">
-      <Tide moods={dailyMoods(entries).slice(0, TIDE_DAYS).map((d) => d.moodScore).reverse()} />
+      {picker}
+      <Tide moods={dailyMoods(entries).map((d) => d.moodScore).reverse()} />
       <ol className="flex flex-col">
         {entries.map((e) => {
           const date = e.createdAt?.toDate()
